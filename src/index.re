@@ -23,6 +23,7 @@ type sceneObject = {
   sprite: Reprocessing_Types.Types.imageT,
   width: float,
   height: float,
+  angle: float,
   // Acceleration
   acc: (float, float),
   // Velocity
@@ -31,8 +32,6 @@ type sceneObject = {
   pos: (float, float),
 };
 
-type scene = {lander: sceneObject};
-
 type viewport = {
   x: float,
   y: float,
@@ -40,9 +39,14 @@ type viewport = {
   height: float,
 };
 
+type scene = {lander: sceneObject};
+
+type controls = {thrust: float};
+
 type state = {
   viewport,
   scene,
+  controls,
 };
 
 let getX = ((x, _y): (float, float)) => x;
@@ -62,17 +66,9 @@ let ( *> ) = ((x1, y1), factor) => (x1 *. factor, y1 *. factor);
 let updateSceneObject = (obj: sceneObject, env): sceneObject => {
   let dt = Env.deltaTime(env);
   let {acc, vel, pos} = obj;
-  let newAcc = acc;
   let newVel = vel +> acc *> dt;
   let newPos = pos +> vel *> dt;
-  // Stop on landing!
-  let (newVel, newPos) =
-    if (getY(newPos) <= 0.0) {
-      (zeroVec, (getX(newPos), 0.0));
-    } else {
-      (newVel, newPos);
-    };
-  {...obj, acc: newAcc, vel: newVel, pos: newPos};
+  {...obj, vel: newVel, pos: newPos};
 };
 
 let setup = env => {
@@ -93,43 +89,79 @@ let setup = env => {
         sprite: Draw.loadImage(~filename=lander, env),
         width: landerWidth,
         height: landerHeight,
-        acc: gravity,
+        angle: 0.0,
+        acc: zeroVec,
         vel: zeroVec,
-        pos: zeroVec,
+        pos: (20.0, 0.0),
       },
+    },
+    controls: {
+      thrust: 0.0,
     },
   };
 };
 
 let drawObject =
-    ({sprite, pos: (posX, posY), width, height}: sceneObject, env) => {
+    ({sprite, pos: (posX, posY), angle, width, height}: sceneObject, env) => {
+  Draw.pushMatrix(env);
   // We draw image in 0,0 of size 1,1 so we can invert it without moving it
   // We need to draw it upside-down because the Y axis is inverted
-  let (offsetX, offsetY) = (posX, posY +. height);
+  let (offsetX, offsetY) = (posX -. width /. 2.0, posY +. height /. 2.0);
+  // TODO: Figure out how to rotate around proper center...
   Draw.translate(~x=offsetX, ~y=offsetY, env);
+  Draw.rotate(angle, env);
   Draw.scale(~x=width, ~y=-. height, env);
   Draw.image(sprite, ~pos=(0, 0), ~width=1, ~height=1, env);
-  // Revert transformations
-  Draw.scale(~x=1.0 /. width, ~y=1.0 /. (-. height), env);
-  Draw.translate(~x=-. offsetX, ~y=-. offsetY, env);
+
+  Draw.popMatrix(env);
 };
 
-let update = (state, env) => {
-  ...state,
-  scene: {
-    lander: updateSceneObject(state.scene.lander, env),
-  },
+let handleEvents = (state, env) => {
+  {
+    ...state,
+    controls: {
+      thrust:
+        if (Env.keyPressed(Up, env)) {
+          1.0;
+        } else if (Env.keyReleased(Up, env)) {
+          0.0;
+        } else {
+          state.controls.thrust;
+        },
+    },
+  };
 };
 
-let keyPressed = (state, _env) => {
-  let lander = state.scene.lander;
+let updateLander = (state, _env) => {
+  // Stop on landing!
+  let (newVel, newPos) =
+    if (getY(state.scene.lander.pos) < 0.0) {
+      (zeroVec, (getX(state.scene.lander.pos), 0.0));
+    } else {
+      (state.scene.lander.vel, state.scene.lander.pos);
+    };
   {
     ...state,
     scene: {
       lander: {
-        ...lander,
-        vel: (3.0, 1.0),
+        ...state.scene.lander,
+        acc: gravity +> (0.0, state.controls.thrust *. 3.0),
+        vel: newVel,
+        pos: newPos,
+        angle: state.scene.lander.angle +. 0.01,
       },
+    },
+  };
+};
+
+let update = (state, env) => {
+  let state = handleEvents(state, env);
+  let state = updateLander(state, env);
+  // printVec(state.scene.lander.acc);
+  {
+    ...state,
+    scene: {
+      lander: updateSceneObject(state.scene.lander, env),
     },
   };
 };
@@ -148,7 +180,14 @@ let draw = (state, env) => {
   Draw.fill(groundColor, env);
   Draw.rect(~pos=((-1000), (-1000)), ~width=2000, ~height=1000, env);
   drawObject(scene.lander, env);
+  drawObject(
+    {
+      ...scene.lander,
+      pos: (getX(scene.lander.pos) +. 20.0, getY(scene.lander.pos) +. 5.0),
+    },
+    env,
+  );
   update(state, env);
 };
 
-run(~setup, ~draw, ~keyPressed, ());
+run(~setup, ~draw, ());
