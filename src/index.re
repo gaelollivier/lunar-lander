@@ -92,7 +92,7 @@ let setup = env => {
         angle: 0.0,
         acc: zeroVec,
         vel: zeroVec,
-        pos: (20.0, 0.0),
+        pos: (50.0, 0.0),
       },
     },
     controls: {
@@ -104,14 +104,13 @@ let setup = env => {
 let drawObject =
     ({sprite, pos: (posX, posY), angle, width, height}: sceneObject, env) => {
   Draw.pushMatrix(env);
-  // We draw image in 0,0 of size 1,1 so we can invert it without moving it
+  // We draw image in -0.5,-0.5 of size 1,1 so we can rotate and invert it
   // We need to draw it upside-down because the Y axis is inverted
-  let (offsetX, offsetY) = (posX -. width /. 2.0, posY +. height /. 2.0);
-  // TODO: Figure out how to rotate around proper center...
+  let (offsetX, offsetY) = (posX, posY +. height /. 2.0);
   Draw.translate(~x=offsetX, ~y=offsetY, env);
   Draw.rotate(angle, env);
   Draw.scale(~x=width, ~y=-. height, env);
-  Draw.image(sprite, ~pos=(0, 0), ~width=1, ~height=1, env);
+  Draw.imagef(sprite, ~pos=((-0.5), (-0.5)), ~width=1.0, ~height=1.0, env);
 
   Draw.popMatrix(env);
 };
@@ -148,7 +147,7 @@ let updateLander = (state, _env) => {
         acc: gravity +> (0.0, state.controls.thrust *. 3.0),
         vel: newVel,
         pos: newPos,
-        angle: state.scene.lander.angle +. 0.01,
+        angle: 0.0,
       },
     },
   };
@@ -180,13 +179,6 @@ let draw = (state, env) => {
   Draw.fill(groundColor, env);
   Draw.rect(~pos=((-1000), (-1000)), ~width=2000, ~height=1000, env);
   drawObject(scene.lander, env);
-  drawObject(
-    {
-      ...scene.lander,
-      pos: (getX(scene.lander.pos) +. 20.0, getY(scene.lander.pos) +. 5.0),
-    },
-    env,
-  );
   update(state, env);
 };
 
