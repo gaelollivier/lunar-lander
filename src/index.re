@@ -1,5 +1,7 @@
 open Reprocessing;
 
+let pi = 3.14159265;
+
 let screenWidth = 800.0;
 let screenHeight = 600.0;
 
@@ -41,7 +43,10 @@ type viewport = {
 
 type scene = {lander: sceneObject};
 
-type controls = {thrust: float};
+type controls = {
+  thrust: float,
+  roll: float,
+};
 
 type state = {
   viewport,
@@ -97,6 +102,7 @@ let setup = env => {
     },
     controls: {
       thrust: 0.0,
+      roll: 0.0,
     },
   };
 };
@@ -118,6 +124,17 @@ let drawObject =
 let handleEvents = (state, env) => {
   {
     ...state,
+    scene: {
+      lander:
+        Env.keyPressed(Space, env)
+          ? {
+            ...state.scene.lander,
+            vel: (10.0, 0.0),
+            pos: (10.0, 50.0),
+            angle: pi /. 3.0,
+          }
+          : state.scene.lander,
+    },
     controls: {
       thrust:
         if (Env.keyPressed(Up, env)) {
@@ -127,27 +144,36 @@ let handleEvents = (state, env) => {
         } else {
           state.controls.thrust;
         },
+      roll:
+        if (Env.keyPressed(Left, env)) {
+          0.01;
+        } else if (Env.keyPressed(Right, env)) {
+          (-0.01);
+        } else if (Env.keyReleased(Left, env) || Env.keyReleased(Right, env)) {
+          0.0;
+        } else {
+          state.controls.roll;
+        },
     },
   };
 };
 
 let updateLander = (state, _env) => {
   // Stop on landing!
-  let (newVel, newPos) =
-    if (getY(state.scene.lander.pos) < 0.0) {
-      (zeroVec, (getX(state.scene.lander.pos), 0.0));
-    } else {
-      (state.scene.lander.vel, state.scene.lander.pos);
-    };
+  let {vel, pos, angle} = state.scene.lander;
+  let thrustAngle = angle +. pi /. 2.0;
+  let thrustVec =
+    (cos(thrustAngle), sin(thrustAngle)) *> (state.controls.thrust *. 5.0);
+  let landed = getY(pos) < 0.0;
   {
     ...state,
     scene: {
       lander: {
         ...state.scene.lander,
-        acc: gravity +> (0.0, state.controls.thrust *. 3.0),
-        vel: newVel,
-        pos: newPos,
-        angle: 0.0,
+        acc: gravity +> thrustVec,
+        vel: landed ? zeroVec : vel,
+        pos: landed ? (getX(pos), 0.0) : pos,
+        angle: landed ? 0.0 : angle +. state.controls.roll,
       },
     },
   };
@@ -156,7 +182,6 @@ let updateLander = (state, _env) => {
 let update = (state, env) => {
   let state = handleEvents(state, env);
   let state = updateLander(state, env);
-  // printVec(state.scene.lander.acc);
   {
     ...state,
     scene: {
