@@ -14,12 +14,28 @@ let landerImageRatio = 600.0 /. 437.0;
 let landerWidth = 9.4;
 let landerHeight = landerWidth /. landerImageRatio;
 
+// Moon gravity
+let moonGravity = 1.622;
+
+// Sources:
+// - https://nssdc.gsfc.nasa.gov/nmc/spacecraft/display.action?id=1969-059C
+// - https://en.wikipedia.org/wiki/Apollo_Lunar_Module
+// Masses in Kg
+let totalPropellantMass = 8248.0;
+// Total LM mass - propellant mass
+let landerDryMass = 15103.0 -. totalPropellantMass;
+// Max thrust in N
+let maxThrust = 45000.0;
+let isp = 311.0;
+let totalImpulse = isp *. totalPropellantMass *. moonGravity;
+let totalBurnTime = totalImpulse /. maxThrust;
+
+let veq = isp *. moonGravity;
+let massFlowRate = maxThrust /. veq;
+
 let assetsDirectory = "./assets";
 
 let lander = assetsDirectory ++ "/lunar_module.png";
-
-// Moon gravity
-let gravity = (0.0, (-1.62));
 
 type sceneObject = {
   sprite: Reprocessing_Types.Types.imageT,
@@ -48,10 +64,15 @@ type controls = {
   roll: float,
 };
 
+type lander = {
+  propellantMass: float,
+};
+
 type state = {
   viewport,
   scene,
   controls,
+  lander
 };
 
 let getX = ((x, _y): (float, float)) => x;
@@ -104,6 +125,9 @@ let setup = env => {
       thrust: 0.0,
       roll: 0.0,
     },
+    lander: {
+      propellantMass: totalPropellantMass,
+    }
   };
 };
 
@@ -158,24 +182,38 @@ let handleEvents = (state, env) => {
   };
 };
 
-let updateLander = (state, _env) => {
-  // Stop on landing!
+let updateLander = (state, env) => {
+  let dt = Env.deltaTime(env);
+  let {propellantMass} = state.lander;
   let {vel, pos, angle} = state.scene.lander;
+  let gravityAcceleration = (0.0, (-.moonGravity));
+
+  let thrust = maxThrust *. state.controls.thrust;
   let thrustAngle = angle +. pi /. 2.0;
-  let thrustVec =
-    (cos(thrustAngle), sin(thrustAngle)) *> (state.controls.thrust *. 5.0);
+  let thrustVec = (cos(thrustAngle), sin(thrustAngle));
+  let currentMass = landerDryMass +. propellantMass;
+  let thrustAcceleration = thrustVec *> (thrust /. currentMass);
+
+  // Calculate expelled propellant
+  let massFlowRate = thrust /. veq;
+  let newPropellantMass = propellantMass -. massFlowRate *. dt;
+
+  // Stop on landing!
   let landed = getY(pos) < 0.0;
   {
     ...state,
     scene: {
       lander: {
         ...state.scene.lander,
-        acc: gravity +> thrustVec,
+        acc: gravityAcceleration +> thrustAcceleration,
         vel: landed ? zeroVec : vel,
         pos: landed ? (getX(pos), 0.0) : pos,
         angle: landed ? 0.0 : angle +. state.controls.roll,
       },
     },
+    lander: {
+      propellantMass: newPropellantMass,
+    }
   };
 };
 
