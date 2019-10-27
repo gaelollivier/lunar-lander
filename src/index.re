@@ -33,6 +33,14 @@ let totalBurnTime = totalImpulse /. maxThrust;
 let veq = isp *. moonGravity;
 let massFlowRate = maxThrust /. veq;
 
+// Totally eye-balling the RCS position relative to center of mass...
+let rcsPosition = (2.1, 1.7);
+let rcsPositionLength = Vec.length(rcsPosition);
+// Somehow the RCS thrust seems to be really low... So I boost it *5 to make it
+// playable
+// https://en.wikipedia.org/wiki/R-4D
+let rcsThrust = 490.0 *. 8.0;
+
 let assetsDirectory = "./assets";
 
 let lander = assetsDirectory ++ "/lunar_module.png";
@@ -41,13 +49,15 @@ type sceneObject = {
   sprite: Reprocessing_Types.Types.imageT,
   width: float,
   height: float,
-  angle: float,
   // Acceleration
   acc: (float, float),
   // Velocity
   vel: (float, float),
   // Position
   pos: (float, float),
+  angularAcc: float,
+  angularVel: float,
+  angle: float,
 };
 
 type viewport = {
@@ -64,37 +74,13 @@ type controls = {
   roll: float,
 };
 
-type lander = {
-  propellantMass: float,
-};
+type lander = {propellantMass: float};
 
 type state = {
   viewport,
   scene,
   controls,
-  lander
-};
-
-let getX = ((x, _y): (float, float)) => x;
-let getY = ((_x, y): (float, float)) => y;
-let zeroVec = (0.0, 0.0);
-
-let printVec = ((x, y)) =>
-  print_endline(
-    "(" ++ string_of_float(x) ++ "," ++ string_of_float(y) ++ ")",
-  );
-
-// 2d Addition
-let (+>) = ((x1, y1), (x2, y2)) => (x1 +. x2, y1 +. y2);
-// 2d Scalar Multiplication
-let ( *> ) = ((x1, y1), factor) => (x1 *. factor, y1 *. factor);
-
-let updateSceneObject = (obj: sceneObject, env): sceneObject => {
-  let dt = Env.deltaTime(env);
-  let {acc, vel, pos} = obj;
-  let newVel = vel +> acc *> dt;
-  let newPos = pos +> vel *> dt;
-  {...obj, vel: newVel, pos: newPos};
+  lander,
 };
 
 let setup = env => {
@@ -115,10 +101,12 @@ let setup = env => {
         sprite: Draw.loadImage(~filename=lander, env),
         width: landerWidth,
         height: landerHeight,
-        angle: 0.0,
-        acc: zeroVec,
-        vel: zeroVec,
+        acc: Vec.zero,
+        vel: Vec.zero,
         pos: (50.0, 0.0),
+        angularAcc: 0.0,
+        angularVel: 0.0,
+        angle: 0.0,
       },
     },
     controls: {
@@ -127,7 +115,7 @@ let setup = env => {
     },
     lander: {
       propellantMass: totalPropellantMass,
-    }
+    },
   };
 };
 
@@ -155,6 +143,8 @@ let handleEvents = (state, env) => {
             ...state.scene.lander,
             vel: (10.0, 0.0),
             pos: (10.0, 50.0),
+            angularAcc: 0.0,
+            angularVel: 0.0,
             angle: pi /. 3.0,
           }
           : state.scene.lander,
@@ -170,9 +160,9 @@ let handleEvents = (state, env) => {
         },
       roll:
         if (Env.keyPressed(Left, env)) {
-          0.01;
+          1.0;
         } else if (Env.keyPressed(Right, env)) {
-          (-0.01);
+          (-1.0);
         } else if (Env.keyReleased(Left, env) || Env.keyReleased(Right, env)) {
           0.0;
         } else {
@@ -185,35 +175,60 @@ let handleEvents = (state, env) => {
 let updateLander = (state, env) => {
   let dt = Env.deltaTime(env);
   let {propellantMass} = state.lander;
-  let {vel, pos, angle} = state.scene.lander;
-  let gravityAcceleration = (0.0, (-.moonGravity));
+  let {vel, pos, angularVel, angle} = state.scene.lander;
+  let gravityAcceleration = (0.0, -. moonGravity);
 
-  let thrust = maxThrust *. state.controls.thrust;
+  let thrust = propellantMass > 0.0 ? maxThrust *. state.controls.thrust : 0.0;
   let thrustAngle = angle +. pi /. 2.0;
   let thrustVec = (cos(thrustAngle), sin(thrustAngle));
   let currentMass = landerDryMass +. propellantMass;
-  let thrustAcceleration = thrustVec *> (thrust /. currentMass);
+  let thrustAcceleration = Vec.(thrustVec *> (thrust /. currentMass));
 
   // Calculate expelled propellant
   let massFlowRate = thrust /. veq;
   let newPropellantMass = propellantMass -. massFlowRate *. dt;
 
+  // Consider rcs thrust perfectly perpendicular to their axis with CoM
+  // Torque ends-up being just r * F
+  // https://en.wikipedia.org/wiki/Torque
+  let torque = rcsPositionLength *. rcsThrust *. state.controls.roll;
+
+  // Approximate moment of inertia by treating the lander as a sphere of radius
+  // of the lander width...
+  let landerRadius = landerWidth /. 2.0;
+  let momentOfInertia =
+    2.0 /. 5.0 *. (currentMass *. landerRadius *. landerRadius);
+  let angularAcc = torque /. momentOfInertia;
+
   // Stop on landing!
-  let landed = getY(pos) < 0.0;
+  let landed = Vec.getY(pos) < 0.0;
   {
     ...state,
     scene: {
       lander: {
         ...state.scene.lander,
-        acc: gravityAcceleration +> thrustAcceleration,
-        vel: landed ? zeroVec : vel,
-        pos: landed ? (getX(pos), 0.0) : pos,
-        angle: landed ? 0.0 : angle +. state.controls.roll,
+        acc: Vec.(gravityAcceleration +> thrustAcceleration),
+        vel: landed ? Vec.zero : vel,
+        pos: landed ? (Vec.getX(pos), 0.0) : pos,
+        angularAcc: landed ? 0.0 : angularAcc,
+        angularVel: landed ? 0.0 : angularVel,
       },
     },
     lander: {
       propellantMass: newPropellantMass,
-    }
+    },
+  };
+};
+
+let updateSceneObject = (obj: sceneObject, env): sceneObject => {
+  let dt = Env.deltaTime(env);
+  let {acc, vel, pos, angularAcc, angularVel, angle} = obj;
+  {
+    ...obj,
+    vel: Vec.(vel +> acc *> dt),
+    pos: Vec.(pos +> vel *> dt),
+    angularVel: angularVel +. angularAcc *. dt,
+    angle: angle +. angularVel *. dt,
   };
 };
 

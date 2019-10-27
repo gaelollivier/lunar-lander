@@ -1,3 +1,4 @@
 {
-  "reason.path.bsb": "./node_modules/bs-platform/lib/bsb"
+  "reason.path.bsb": "./node_modules/bs-platform/lib/bsb",
+  "reason_language_server.refmt": "./node_modules/.bin/bsrefmt"
 }
