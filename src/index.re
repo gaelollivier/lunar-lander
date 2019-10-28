@@ -43,7 +43,8 @@ let rcsThrust = 490.0 *. 8.0;
 
 let assetsDirectory = "./assets";
 
-let lander = assetsDirectory ++ "/lunar_module.png";
+let landerSprite = assetsDirectory ++ "/lunar_module.png";
+let digitsFont = assetsDirectory ++ "/font-digits.fnt";
 
 type sceneObject = {
   sprite: Reprocessing_Types.Types.imageT,
@@ -69,6 +70,8 @@ type viewport = {
 
 type scene = {lander: sceneObject};
 
+type fonts = {digits: fontT};
+
 type controls = {
   thrust: float,
   roll: float,
@@ -79,6 +82,7 @@ type lander = {propellantMass: float};
 type state = {
   viewport,
   scene,
+  fonts,
   controls,
   lander,
 };
@@ -98,7 +102,7 @@ let setup = env => {
     },
     scene: {
       lander: {
-        sprite: Draw.loadImage(~filename=lander, env),
+        sprite: Draw.loadImage(~filename=landerSprite, env),
         width: landerWidth,
         height: landerHeight,
         acc: Vec.zero,
@@ -108,6 +112,9 @@ let setup = env => {
         angularVel: 0.0,
         angle: 0.0,
       },
+    },
+    fonts: {
+      digits: Draw.loadFont(~filename=digitsFont, ~isPixel=true, env),
     },
     controls: {
       thrust: 0.0,
@@ -244,7 +251,8 @@ let update = (state, env) => {
 };
 
 let draw = (state, env) => {
-  let {viewport, scene} = state;
+  let {viewport, scene, fonts} = state;
+  Draw.pushMatrix(env);
   Draw.background(backgroundColor, env);
   // World to screen transform
   Draw.scale(
@@ -257,6 +265,9 @@ let draw = (state, env) => {
   Draw.fill(groundColor, env);
   Draw.rect(~pos=((-1000), (-1000)), ~width=2000, ~height=1000, env);
   drawObject(scene.lander, env);
+  Draw.popMatrix(env);
+  // Draw HUD
+  Draw.text(~body="TEST", ~font=fonts.digits, ~pos=(50, 50), env);
   update(state, env);
 };
 
