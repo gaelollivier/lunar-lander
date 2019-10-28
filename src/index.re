@@ -273,7 +273,7 @@ let drawHUD = (state, env) => {
 };
 
 let draw = (state, env) => {
-  let {viewport, scene, fonts} = state;
+  let {viewport, scene} = state;
   Draw.pushMatrix(env);
   Draw.background(backgroundColor, env);
   // World to screen transform
