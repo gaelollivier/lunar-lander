@@ -44,7 +44,7 @@ let rcsThrust = 490.0 *. 8.0;
 let assetsDirectory = "./assets";
 
 let landerSprite = assetsDirectory ++ "/lunar_module.png";
-let digitsFont = assetsDirectory ++ "/font-digits.fnt";
+let digitsFont = assetsDirectory ++ "/font-digits_2x.fnt";
 
 type sceneObject = {
   sprite: Reprocessing_Types.Types.imageT,
@@ -97,8 +97,8 @@ let setup = env => {
     viewport: {
       x: 0.0,
       y: (-10.0),
-      width: 100.0,
-      height: 100.0 /. viewportRatio,
+      width: 200.0,
+      height: 200.0 /. viewportRatio,
     },
     scene: {
       lander: {
@@ -148,8 +148,8 @@ let handleEvents = (state, env) => {
         Env.keyPressed(Space, env)
           ? {
             ...state.scene.lander,
-            vel: (10.0, 0.0),
-            pos: (10.0, 50.0),
+            vel: (25.0, 0.0),
+            pos: (10.0, 100.0),
             angularAcc: 0.0,
             angularVel: 0.0,
             angle: pi /. 3.0,
@@ -250,6 +250,28 @@ let update = (state, env) => {
   };
 };
 
+let drawNumber = (state, number, (posX, posY), env) => {
+  let textWidth =
+    Draw.textWidth(
+      ~body=Printf.sprintf("%.2f", number),
+      ~font=state.fonts.digits,
+      env,
+    );
+  Draw.text(
+    ~body=Printf.sprintf("%.2f", number),
+    ~font=state.fonts.digits,
+    // Position is relative to top right, so text is right-aligned
+    ~pos=(posX - textWidth, posY),
+    env,
+  );
+};
+
+let drawHUD = (state, env) => {
+  let (horizontalVelocity, verticalVelocity) = state.scene.lander.vel;
+  drawNumber(state, verticalVelocity, (120, 50), env);
+  drawNumber(state, horizontalVelocity, (120, 85), env);
+};
+
 let draw = (state, env) => {
   let {viewport, scene, fonts} = state;
   Draw.pushMatrix(env);
@@ -264,10 +286,11 @@ let draw = (state, env) => {
   // Ground
   Draw.fill(groundColor, env);
   Draw.rect(~pos=((-1000), (-1000)), ~width=2000, ~height=1000, env);
+  // Lander
   drawObject(scene.lander, env);
   Draw.popMatrix(env);
   // Draw HUD
-  Draw.text(~body="TEST", ~font=fonts.digits, ~pos=(50, 50), env);
+  drawHUD(state, env);
   update(state, env);
 };
 
