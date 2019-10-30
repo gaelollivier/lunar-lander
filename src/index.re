@@ -45,6 +45,7 @@ let assetsDirectory = "./assets";
 
 let landerSprite = assetsDirectory ++ "/lunar_module.png";
 let digitsFont = assetsDirectory ++ "/font-digits_2x.fnt";
+let hudBackground = assetsDirectory ++ "/HUD.png";
 
 type sceneObject = {
   sprite: Reprocessing_Types.Types.imageT,
@@ -68,7 +69,12 @@ type viewport = {
   height: float,
 };
 
-type scene = {lander: sceneObject};
+type hud = {background: Reprocessing_Types.Types.imageT};
+
+type scene = {
+  lander: sceneObject,
+  hud,
+};
 
 type fonts = {digits: fontT};
 
@@ -101,6 +107,9 @@ let setup = env => {
       height: 200.0 /. viewportRatio,
     },
     scene: {
+      hud: {
+        background: Draw.loadImage(~filename=hudBackground, env),
+      },
       lander: {
         sprite: Draw.loadImage(~filename=landerSprite, env),
         width: landerWidth,
@@ -144,6 +153,7 @@ let handleEvents = (state, env) => {
   {
     ...state,
     scene: {
+      ...state.scene,
       lander:
         Env.keyPressed(Space, env)
           ? {
@@ -212,6 +222,7 @@ let updateLander = (state, env) => {
   {
     ...state,
     scene: {
+      ...state.scene,
       lander: {
         ...state.scene.lander,
         acc: Vec.(gravityAcceleration +> thrustAcceleration),
@@ -245,6 +256,7 @@ let update = (state, env) => {
   {
     ...state,
     scene: {
+      ...state.scene,
       lander: updateSceneObject(state.scene.lander, env),
     },
   };
@@ -267,9 +279,25 @@ let drawNumber = (state, number, (posX, posY), env) => {
 };
 
 let drawHUD = (state, env) => {
+  Draw.image(
+    state.scene.hud.background,
+    ~pos=(int_of_float(screenWidth) - 190, 10),
+    env,
+  );
   let (horizontalVelocity, verticalVelocity) = state.scene.lander.vel;
-  drawNumber(state, verticalVelocity, (120, 50), env);
-  drawNumber(state, horizontalVelocity, (120, 85), env);
+  let rightPos = 39;
+  drawNumber(
+    state,
+    verticalVelocity,
+    (int_of_float(screenWidth) - rightPos, 100),
+    env,
+  );
+  drawNumber(
+    state,
+    horizontalVelocity,
+    (int_of_float(screenWidth) - rightPos, 190),
+    env,
+  );
 };
 
 let draw = (state, env) => {
